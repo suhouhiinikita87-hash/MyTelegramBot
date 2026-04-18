@@ -5,7 +5,6 @@ from flask import Flask
 import threading
 import json
 from datetime import datetime, timedelta
-import os.path
 
 # --- Токен из переменных окружения Railway ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -74,7 +73,7 @@ def start(message):
         f"📌 Что я умею:\n"
         f"➖ Добавить расход\n"
         f"➕ Добавить доход\n"
-        f"📊 Статистика (всего, по категориям)\n"
+        f"📊 Статистика\n"
         f"📅 За сегодня\n"
         f"📈 График расходов\n"
         f"📆 Месячный отчёт\n"
@@ -91,7 +90,8 @@ def ask_expense(message):
         "📝 **категория сумма**\n\n"
         "Доступные категории:\n"
         + '\n'.join([f"{emoji} {cat}" for cat, emoji in CATEGORIES.items()]) +
-        "\n\nПример: еда 500", parse_mode='Markdown')
+        "\n\nПример: еда 500", 
+        parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_transaction, 'expense')
 
 # --- Добавление дохода ---
@@ -102,7 +102,8 @@ def ask_income(message):
         "📝 **категория сумма**\n\n"
         "Доступные категории:\n"
         + '\n'.join([f"{emoji} {cat}" for cat, emoji in CATEGORIES_INCOME.items()]) +
-        "\n\nПример: зарплата 50000", parse_mode='Markdown')
+        "\n\nПример: зарплата 50000", 
+        parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_transaction, 'income')
 
 def save_transaction(message, trans_type):
@@ -127,7 +128,7 @@ def save_transaction(message, trans_type):
     
     data = load_data()
     if user_id not in data:
-        data[user_id] = {'expenses': [], 'incomes': [], 'budget': None}
+        data[user_id] = {'expenses': [], 'incomes': []}
     
     transaction = {
         'amount': amount,
@@ -240,7 +241,7 @@ def show_today(message):
     
     bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
-# --- График (текстовый) ---
+# --- График ---
 @bot.message_handler(func=lambda message: message.text == '📈 График')
 def show_chart(message):
     user_id = str(message.chat.id)
@@ -250,7 +251,6 @@ def show_chart(message):
         bot.send_message(message.chat.id, "📭 Нет расходов для графика.")
         return
     
-    # Группируем расходы по категориям
     exp_by_cat = {}
     for e in data[user_id]['expenses']:
         cat = e['category']
@@ -258,13 +258,12 @@ def show_chart(message):
     
     total = sum(exp_by_cat.values())
     
-    # Создаём текстовый график
     chart_text = "📊 **ГРАФИК РАСХОДОВ**\n\n"
     
     for cat, amount in sorted(exp_by_cat.items(), key=lambda x: x[1], reverse=True)[:8]:
         emoji = CATEGORIES.get(cat, '📦')
         percent = (amount / total) * 100
-        bar_length = int(percent / 2)  # Максимум 50 символов
+        bar_length = int(percent / 2)
         bar = '█' * bar_length + '░' * (50 - bar_length)
         chart_text += f"{emoji} {cat}:\n"
         chart_text += f"   {bar} {percent:.1f}% ({amount:,.0f} ₽)\n\n"
@@ -285,13 +284,11 @@ def monthly_report(message):
     current_month = now.strftime('%Y-%m')
     last_month = (now.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
     
-    # Текущий месяц
     current_expenses = [e for e in data[user_id]['expenses'] if e['date'].startswith(current_month)]
     current_incomes = [i for i in data[user_id]['incomes'] if i['date'].startswith(current_month)]
     
-    # Прошлый месяц
     last_expenses = [e for e in data[user_id]['expenses'] if e['date'].startswith(last_month)]
-    last_incomes = [i for i indata[user_id]['incomes'] if i['date'].startswith(last_month)]
+    last_incomes = [i for i in data[user_id]['incomes'] if i['date'].startswith(last_month)]
     
     cur_exp_sum = sum(e['amount'] for e in current_expenses)
     cur_inc_sum = sum(i['amount'] for i in current_incomes)
@@ -331,7 +328,7 @@ def handle_reset(call):
         user_id = str(call.message.chat.id)
         data = load_data()
         if user_id in data:
-            data[user_id] = {'expenses': [], 'incomes': [], 'budget': None}
+            data[user_id] = {'expenses': [], 'incomes': []}
             save_data(data)
         bot.edit_message_text("✅ Все данные удалены!", call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "Начните с чистого листа! /start")
@@ -340,8 +337,8 @@ def handle_reset(call):
     
     bot.answer_callback_query(call.id)
 
-# --- Обработка быстрого текста ---
-@bot.message_handler(func=lambda message: message.text and not message.text.startswith('/') and not any(message.text.startswith(x) for x in ['➖', '➕', '📊', '📅', '📈', '📆', '🗑']))
+# --- Быстрое добавление ---
+@bot.message_handler(func=lambda message: message.text and not message.text.startswith('/') and not message.text.startswith('➖') and not message.text.startswith('➕') and not message.text.startswith('📊') and not message.text.startswith('📅') and not message.text.startswith('📈') and not message.text.startswith('📆') and not message.text.startswith('🗑'))
 def quick_add(message):
     text = message.text.strip()
     parts = text.split()
@@ -353,7 +350,7 @@ def quick_add(message):
         data = load_data()
         user_id = str(message.chat.id)
         if user_id not in data:
-            data[user_id] = {'expenses': [], 'incomes': [], 'budget': None}
+            data[user_id] = {'expenses': [], 'incomes': []}
         
         # Проверяем, доход это или расход
         if category in CATEGORIES_INCOME:
@@ -388,7 +385,6 @@ def quick_add(message):
 # --- Запуск бота ---
 def run_bot():
     print("💰 Финансовый бот запущен!")
-    print("Доступны: расходы, доходы, статистика, графики, отчёты")
     bot.infinity_polling()
 
 @server.route('/')
