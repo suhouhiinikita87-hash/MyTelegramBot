@@ -14,21 +14,12 @@ DATA_FILE = 'finance.json'
 
 CATEGORIES = {
     'еда': '🍕', 'транспорт': '🚗', 'кофе': '☕', 'развлечения': '🎮',
-    'шопинг': '🛍️', 'здоровье': '💊', 'прочее': '📦'
+    'шопинг': '🛍️', 'здоровье': '💊', 'коммунальные': '💡', 'связь': '📱', 'прочее': '📦'
 }
 CATEGORIES_INCOME = {
-    'зарплата': '💰', 'фриланс': '💻', 'подарок': '🎁', 'прочее': '📦'
+    'зарплата': '💰', 'фриланс': '💻', 'подарок': '🎁', 'кэшбэк': '💳', 'прочее': '📦'
 }
 
-# ========== ЦЕНЫ НА ПОДПИСКУ ==========
-SUBSCRIPTIONS = {
-    1: {'days': 30, 'price': 50, 'name': '1 месяц', 'discount': 0},
-    3: {'days': 90, 'price': 135, 'name': '3 месяца', 'discount': 10},
-    6: {'days': 180, 'price': 240, 'name': '6 месяцев', 'discount': 20},
-    12: {'days': 365, 'price': 420, 'name': '12 месяцев', 'discount': 30}
-}
-
-# ========== ФУНКЦИИ ПОДПИСКИ ==========
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -39,211 +30,67 @@ def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def is_premium(user_id):
-    data = load_data()
-    user_id = str(user_id)
-    if user_id in data and 'premium_until' in data[user_id]:
-        premium_until = datetime.fromisoformat(data[user_id]['premium_until'])
-        if datetime.now() <= premium_until:
-            return True
-    return False
-
-def get_premium_expiry(user_id):
-    data = load_data()
-    user_id = str(user_id)
-    if user_id in data and 'premium_until' in data[user_id]:
-        return datetime.fromisoformat(data[user_id]['premium_until'])
-    return None
-
-def activate_premium(user_id, months=1):
-    data = load_data()
-    user_id = str(user_id)
-    if user_id not in data:
-        data[user_id] = {'expenses': [], 'incomes': []}
-    days = SUBSCRIPTIONS[months]['days']
-    new_expiry = datetime.now() + timedelta(days=days)
-    if 'premium_until' in data[user_id]:
-        old_expiry = datetime.fromisoformat(data[user_id]['premium_until'])
-        if old_expiry > datetime.now():
-            new_expiry = old_expiry + timedelta(days=days)
-    data[user_id]['premium_until'] = new_expiry.isoformat()
-    data[user_id]['subscription_months'] = months
-    save_data(data)
-    return new_expiry
-
-# ========== КЛАВИАТУРА ==========
 def get_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add('💰 Добавить расход', '💵 Добавить доход')
     markup.add('📊 Статистика', '📅 За сегодня')
-    markup.add('📈 График', '⭐ ПРЕМИУМ')
+    markup.add('📈 График', '📆 Месячный отчёт')
+    markup.add('🔥 Аналитика', '🎯 Бюджет')
+    markup.add('📎 Экспорт CSV', '🏆 Достижения')
     markup.add('🗑 Сбросить всё')
     return markup
 
-# ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
-    user_id = message.chat.id
-    if is_premium(user_id):
-        expiry = get_premium_expiry(user_id)
-        expiry_str = expiry.strftime("%d.%m.%Y") if expiry else "неизвестно"
-        status = f"👑 ПРЕМИУМ АКТИВЕН до {expiry_str} 👑"
-    else:
-        status = "🔓 БЕСПЛАТНЫЙ ТАРИФ 🔓\n⭐ Купи Premium за 50 Stars!"
+    # Создаём пользователя если его нет
+    data = load_data()
+    user_id = str(message.chat.id)
+    if user_id not in data:
+        data[user_id] = {'expenses': [], 'incomes': []}
+        save_data(data)
     
     text = f"""💰 Привет, {message.from_user.first_name}!
 
-{status}
+📝 Я — твой финансовый помощник!
 
-📝 Просто напиши: «еда 500» или «зарплата 50000»
-
-💎 ПРЕМИУМ (50 Stars/мес):
-• Аналитика трендов
-• Умный бюджет
-• Экспорт CSV
-• Напоминания
+✅ Что я умею:
+• Добавлять расходы и доходы
+• Показывать статистику
+• Строить графики
+• Месячные отчёты
+• Аналитику трендов
+• Бюджетирование
+• Экспорт в Excel
 • Достижения
-• Советы по экономии
 
-📅 Чем дольше, тем выгоднее:
-3 мес → 135 ⭐ (-10%)
-6 мес → 240 ⭐ (-20%)
-12 мес → 420 ⭐ (-30%)"""
+💡 Быстрый ввод: просто напиши «еда 500» или «зарплата 50000»
+
+👇 Используй кнопки ниже для управления финансами!"""
     
     bot.send_message(message.chat.id, text, reply_markup=get_keyboard())
 
-@bot.message_handler(func=lambda message: message.text == '⭐ ПРЕМИУМ')
-def show_premium(message):
-    text = """⭐ ПРЕМИУМ ПОДПИСКА ⭐
-
-Выбери срок:
-
-📅 1 месяц — 50 ⭐
-📅 3 месяца — 135 ⭐ (экономия 15 ⭐)
-📅 6 месяцев — 240 ⭐ (экономия 60 ⭐)
-📅 12 месяцев — 420 ⭐ (экономия 180 ⭐)
-
-💡 Чем дольше, тем выгоднее!"""
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    for months, info in SUBSCRIPTIONS.items():
-        markup.add(types.InlineKeyboardButton(
-            f"📅 {info['name']} — {info['price']} ⭐",
-            callback_data=f"buy_{months}"
-        ))
-    
-    bot.send_message(message.chat.id, text, reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
-def process_purchase(call):
-    months = int(call.data.split('_')[1])
-    info = SUBSCRIPTIONS[months]
-    
-    prices = [types.LabeledPrice(label=f"Premium {info['name']}", amount=info['price'])]
-    
-    bot.send_invoice(
-        call.message.chat.id,
-        title=f"⭐ Premium - {info['name']}",
-        description=f"Premium доступ на {info['days']} дней.\n\nФункции:\n• Аналитика трендов\n• Умный бюджет\n• Экспорт CSV\n• Напоминания\n• Достижения\n• Советы по экономии",
-        invoice_payload=f"premium_{months}",
-        provider_token="",
-        currency="XTR",
-        prices=prices,
-        start_parameter=f"premium_{months}"
-    )
-    bot.answer_callback_query(call.id)
-
-@bot.pre_checkout_query_handler(func=lambda query: True)
-def on_pre_checkout(query):
-    bot.answer_pre_checkout_query(query.id, ok=True)
-
-@bot.message_handler(content_types=['successful_payment'])
-def on_payment(message):
-    payload = message.successful_payment.invoice_payload
-    months = int(payload.split('_')[1])
-    expiry = activate_premium(message.chat.id, months)
-    expiry_str = expiry.strftime("%d.%m.%Y")
-    
-    text = f"""✅ ОПЛАТА ПРОШЛА!
-
-🎉 Premium активирован до {expiry_str}
-
-🔥 Тебе доступны все функции:
-• Аналитика трендов
-• Умный бюджет
-• Экспорт данных
-• Напоминания
-• Достижения
-
-Используй /start для начала!"""
-    
-    bot.send_message(message.chat.id, text)
-    start(message)
-
-@bot.message_handler(commands=['check'])
-def check(message):
-    if is_premium(message.chat.id):
-        expiry = get_premium_expiry(message.chat.id)
-        text = f"👑 Статус: PREMIUM\n📅 Активен до: {expiry.strftime('%d.%m.%Y')}"
-    else:
-        text = "🔓 Статус: БЕСПЛАТНЫЙ\n⭐ Купи Premium: /premium"
-    bot.send_message(message.chat.id, text)
-
-# ========== ПРЕМИУМ-ФУНКЦИИ (с проверкой) ==========
-@bot.message_handler(func=lambda message: message.text == '📊 Статистика')
-def show_stats(message):
-    user_id = str(message.chat.id)
-    data = load_data()
-    premium = is_premium(message.chat.id)
-    
-    if user_id not in data or (not data[user_id].get('expenses') and not data[user_id].get('incomes')):
-        bot.send_message(message.chat.id, "📭 Нет данных")
-        return
-    
-    expenses = data[user_id]['expenses']
-    incomes = data[user_id]['incomes']
-    total_exp = sum(e['amount'] for e in expenses)
-    total_inc = sum(i['amount'] for i in incomes)
-    balance = total_inc - total_exp
-    
-    exp_by_cat = {}
-    for e in expenses:
-        cat = e['category']
-        exp_by_cat[cat] = exp_by_cat.get(cat, 0) + e['amount']
-    
-    text = f"📊 СТАТИСТИКА\n\n💰 Доходы: {total_inc:,.0f} ₽\n💸 Расходы: {total_exp:,.0f} ₽\n📊 Баланс: {balance:+,.0f} ₽\n\n📉 Расходы по категориям:\n"
-    
-    for cat, amt in sorted(exp_by_cat.items(), key=lambda x: x[1], reverse=True)[:5]:
-        text += f"{CATEGORIES.get(cat, '📦')} {cat}: {amt:,.0f} ₽\n"
-    
-    # Premium аналитика
-    if premium:
-        if expenses:
-            avg = total_exp / len(expenses)
-            text += f"\n🌟 ПРЕМИУМ АНАЛИТИКА:\n📊 Средний чек: {avg:,.0f} ₽"
-        
-        # Проверка бюджета
-        if 'budget' in data[user_id]:
-            budget = data[user_id]['budget']
-            month_exp = sum(e['amount'] for e in expenses if e['date'].startswith(datetime.now().strftime('%Y-%m')))
-            percent = (month_exp / budget) * 100
-            if percent > 100:
-                text += f"\n⚠️ Бюджет превышен на {percent-100:.0f}%!"
-            elif percent > 80:
-                text += f"\n⚠️ Осталось {budget-month_exp:,.0f} ₽ до лимита"
-    else:
-        text += f"\n\n⭐ Купи Premium за 50 Stars, чтобы видеть аналитику, бюджет и экспорт!"
-    
-    bot.send_message(message.chat.id, text)
+# ========== ДОБАВЛЕНИЕ РАСХОДОВ/ДОХОДОВ ==========
 
 @bot.message_handler(func=lambda message: message.text == '💰 Добавить расход')
 def ask_expense(message):
-    msg = bot.send_message(message.chat.id, "📝 Напиши: категория сумма\nПример: еда 500")
+    msg = bot.send_message(message.chat.id, 
+        "📝 *Добавление расхода*\n\n"
+        "Напиши в формате: *категория сумма*\n\n"
+        "📌 *Категории:*\n"
+        + '\n'.join([f"{emoji} {cat}" for cat, emoji in CATEGORIES.items()]) +
+        "\n\n✅ *Примеры:*\nеда 500\nтранспорт 200\nкофе 150", 
+        parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_transaction, 'expense')
 
 @bot.message_handler(func=lambda message: message.text == '💵 Добавить доход')
 def ask_income(message):
-    msg = bot.send_message(message.chat.id, "📝 Напиши: категория сумма\nПример: зарплата 50000")
+    msg = bot.send_message(message.chat.id, 
+        "📝 *Добавление дохода*\n\n"
+        "Напиши в формате: *категория сумма*\n\n"
+        "📌 *Категории:*\n"
+        + '\n'.join([f"{emoji} {cat}" for cat, emoji in CATEGORIES_INCOME.items()]) +
+        "\n\n✅ *Примеры:*\nзарплата 50000\nфриланс 15000\nподарок 3000", 
+        parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_transaction, 'income')
 
 def save_transaction(message, trans_type):
@@ -279,12 +126,71 @@ def save_transaction(message, trans_type):
     
     if trans_type == 'expense':
         data[user_id]['expenses'].append(transaction)
-        bot.send_message(message.chat.id, f"✅ Расход: {CATEGORIES.get(category, '📦')} {category} - {amount} ₽")
+        emoji = CATEGORIES.get(category, '📦')
+        bot.send_message(message.chat.id, f"✅ *Расход добавлен!*\n\n{emoji} {category}: {amount:,.0f} ₽", parse_mode='Markdown')
     else:
         data[user_id]['incomes'].append(transaction)
-        bot.send_message(message.chat.id, f"✅ Доход: {CATEGORIES_INCOME.get(category, '📦')} {category} - {amount} ₽")
+        emoji = CATEGORIES_INCOME.get(category, '📦')
+        bot.send_message(message.chat.id, f"✅ *Доход добавлен!*\n\n{emoji} {category}: {amount:,.0f} ₽", parse_mode='Markdown')
     
     save_data(data)
+
+# ========== СТАТИСТИКА ==========
+
+@bot.message_handler(func=lambda message: message.text == '📊 Статистика')
+def show_stats(message):
+    user_id = str(message.chat.id)
+    data = load_data()
+    
+    if user_id not in data or (not data[user_id].get('expenses') and not data[user_id].get('incomes')):
+        bot.send_message(message.chat.id, "📭 Нет данных. Добавьте первый расход или доход!")
+        return
+    
+    expenses = data[user_id]['expenses']
+    incomes = data[user_id]['incomes']
+    
+    total_exp = sum(e['amount'] for e in expenses)
+    total_inc = sum(i['amount'] for i in incomes)
+    balance = total_inc - total_exp
+    
+    exp_by_cat = {}
+    for e in expenses:
+        cat = e['category']
+        exp_by_cat[cat] = exp_by_cat.get(cat, 0) + e['amount']
+    
+    inc_by_cat = {}
+    for i in incomes:
+        cat = i['category']
+        inc_by_cat[cat] = inc_by_cat.get(cat, 0) + i['amount']
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║       📊 СТАТИСТИКА 📊         ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 💰 Доходы:  {total_inc:>12,.0f} ₽ ║\n"
+    text += f"║ 💸 Расходы: {total_exp:>12,.0f} ₽ ║\n"
+    text += f"║ 📊 Баланс:  {balance:>12,+.0f} ₽ ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║     📉 РАСХОДЫ ПО КАТЕГОРИЯМ   ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    
+    for cat, amt in sorted(exp_by_cat.items(), key=lambda x: x[1], reverse=True):
+        emoji = CATEGORIES.get(cat, '📦')
+        percent = (amt / total_exp * 100) if total_exp > 0 else 0
+        text += f"║ {emoji} {cat[:12]:<12} {amt:>8,.0f} ({percent:>4.0f}%) ║\n"
+    
+    if inc_by_cat:
+        text += f"╠════════════════════════════════╣\n"
+        text += f"║     📈 ДОХОДЫ ПО КАТЕГОРИЯМ   ║\n"
+        text += f"╠════════════════════════════════╣\n"
+        for cat, amt in sorted(inc_by_cat.items(), key=lambda x: x[1], reverse=True):
+            emoji = CATEGORIES_INCOME.get(cat, '📦')
+            text += f"║ {emoji} {cat[:12]:<12} {amt:>8,.0f} ₽ ║\n"
+    
+    text += f"╚════════════════════════════════╝"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== ЗА СЕГОДНЯ ==========
 
 @bot.message_handler(func=lambda message: message.text == '📅 За сегодня')
 def show_today(message):
@@ -302,8 +208,37 @@ def show_today(message):
     total_exp = sum(e['amount'] for e in today_expenses)
     total_inc = sum(i['amount'] for i in today_incomes)
     
-    text = f"📅 ЗА СЕГОДНЯ\n\n💰 Доходы: +{total_inc:,.0f} ₽\n💸 Расходы: -{total_exp:,.0f} ₽\n📊 Итого: {total_inc - total_exp:+,.0f} ₽"
-    bot.send_message(message.chat.id, text)
+    if not today_expenses and not today_incomes:
+        bot.send_message(message.chat.id, f"📅 За сегодня ({datetime.now().strftime('%d.%m.%Y')}) операций нет!")
+        return
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║     📅 ЗА СЕГОДНЯ 📅          ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 📅 {datetime.now().strftime('%d.%m.%Y'):<26} ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    
+    if today_incomes:
+        text += f"║ 💰 ДОХОДЫ:                   ║\n"
+        for i in today_incomes:
+            emoji = CATEGORIES_INCOME.get(i['category'], '📦')
+            text += f"║    {emoji} {i['category'][:12]:<12} +{i['amount']:>8,.0f} ₽ ║\n"
+    
+    if today_expenses:
+        if today_incomes:
+            text += f"╠════════════════════════════════╣\n"
+        text += f"║ 💸 РАСХОДЫ:                  ║\n"
+        for e in today_expenses:
+            emoji = CATEGORIES.get(e['category'], '📦')
+            text += f"║    {emoji} {e['category'][:12]:<12} -{e['amount']:>8,.0f} ₽ ║\n"
+    
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ ИТОГО: {total_inc - total_exp:>+14,.0f} ₽ ║\n"
+    text += f"╚════════════════════════════════╝"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== ГРАФИК ==========
 
 @bot.message_handler(func=lambda message: message.text == '📈 График')
 def show_chart(message):
@@ -311,7 +246,7 @@ def show_chart(message):
     data = load_data()
     
     if user_id not in data or not data[user_id]['expenses']:
-        bot.send_message(message.chat.id, "📭 Нет расходов")
+        bot.send_message(message.chat.id, "📭 Нет расходов для графика")
         return
     
     exp_by_cat = {}
@@ -320,21 +255,295 @@ def show_chart(message):
         exp_by_cat[cat] = exp_by_cat.get(cat, 0) + e['amount']
     
     total = sum(exp_by_cat.values())
-    text = "📊 ГРАФИК РАСХОДОВ\n\n"
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║      📊 ГРАФИК РАСХОДОВ 📊    ║\n"
+    text += f"╠════════════════════════════════╣\n"
     
     for cat, amount in sorted(exp_by_cat.items(), key=lambda x: x[1], reverse=True):
+        emoji = CATEGORIES.get(cat, '📦')
         percent = (amount / total) * 100
-        bar = '█' * int(percent / 2)
-        text += f"{CATEGORIES.get(cat, '📦')} {cat}: {bar} {percent:.0f}%\n"
+        bar_length = int(percent / 2)
+        bar = '█' * bar_length + '░' * (25 - bar_length)
+        text += f"║ {emoji} {cat[:10]:<10} {bar} {percent:>4.0f}% ║\n"
     
-    bot.send_message(message.chat.id, text)
+    text += f"╚════════════════════════════════╝\n"
+    text += f"\n💰 Всего расходов: {total:,.0f} ₽"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== МЕСЯЧНЫЙ ОТЧЁТ ==========
+
+@bot.message_handler(func=lambda message: message.text == '📆 Месячный отчёт')
+def monthly_report(message):
+    user_id = str(message.chat.id)
+    data = load_data()
+    
+    if user_id not in data:
+        bot.send_message(message.chat.id, "📭 Нет данных")
+        return
+    
+    now = datetime.now()
+    current_month = now.strftime('%Y-%m')
+    last_month = (now.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+    
+    current_expenses = [e for e in data[user_id]['expenses'] if e['date'].startswith(current_month)]
+    current_incomes = [i for i in data[user_id]['incomes'] if i['date'].startswith(current_month)]
+    last_expenses = [e for e in data[user_id]['expenses'] if e['date'].startswith(last_month)]
+    last_incomes = [i for i in data[user_id]['incomes'] if i['date'].startswith(last_month)]
+    
+    cur_exp_sum = sum(e['amount'] for e in current_expenses)
+    cur_inc_sum = sum(i['amount'] for i in current_incomes)
+    last_exp_sum = sum(e['amount'] for e in last_expenses)
+    last_inc_sum = sum(i['amount'] for i in last_incomes)
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║     📆 МЕСЯЧНЫЙ ОТЧЁТ 📆      ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 📅 {now.strftime('%B %Y'):<26} ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 💰 Доходы:  {cur_inc_sum:>12,.0f} ₽ ║\n"
+    text += f"║ 💸 Расходы: {cur_exp_sum:>12,.0f} ₽ ║\n"
+    text += f"║ 📊 Баланс:  {cur_inc_sum - cur_exp_sum:>12,+.0f} ₽ ║\n"
+    
+    if last_exp_sum > 0 or last_inc_sum > 0:
+        exp_change = ((cur_exp_sum - last_exp_sum) / last_exp_sum * 100) if last_exp_sum > 0 else 100
+        inc_change = ((cur_inc_sum - last_inc_sum) / last_inc_sum * 100) if last_inc_sum > 0 else 100
+        
+        text += f"╠════════════════════════════════╣\n"
+        text += f"║    📊 СРАВНЕНИЕ С ПРОШЛЫМ    ║\n"
+        text += f"╠════════════════════════════════╣\n"
+        text += f"║ 📉 Расходы: {exp_change:>+11,.1f}% ║\n"
+        text += f"║ 📈 Доходы:  {inc_change:>+11,.1f}% ║\n"
+    
+    text += f"╚════════════════════════════════╝"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== АНАЛИТИКА ==========
+
+@bot.message_handler(func=lambda message: message.text == '🔥 Аналитика')
+def show_trends(message):
+    user_id = str(message.chat.id)
+    data = load_data()
+    
+    if user_id not in data or not data[user_id]['expenses']:
+        bot.send_message(message.chat.id, "📭 Нет данных для анализа")
+        return
+    
+    expenses = data[user_id]['expenses']
+    now = datetime.now()
+    week_ago = now - timedelta(days=7)
+    two_weeks_ago = now - timedelta(days=14)
+    
+    last_week = [e for e in expenses if datetime.fromisoformat(e['timestamp']) >= week_ago]
+    prev_week = [e for e in expenses if two_weeks_ago <= datetime.fromisoformat(e['timestamp']) < week_ago]
+    
+    last_sum = sum(e['amount'] for e in last_week)
+    prev_sum = sum(e['amount'] for e in prev_week)
+    
+    trend = "📈 РАСТУТ" if last_sum > prev_sum else "📉 ПАДАЮТ"
+    change = ((last_sum - prev_sum) / prev_sum * 100) if prev_sum > 0 else 0
+    
+    # Дни недели с максимальными тратами
+    weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+    day_spends = {i: 0 for i in range(7)}
+    for e in expenses:
+        day = datetime.fromisoformat(e['timestamp']).weekday()
+        day_spends[day] += e['amount']
+    max_day = max(day_spends, key=day_spends.get)
+    
+    # Самая крупная трата
+    max_expense = max(expenses, key=lambda x: x['amount'])
+    max_emoji = CATEGORIES.get(max_expense['category'], '📦')
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║        🔥 АНАЛИТИКА 🔥        ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 📊 ТРЕНДЫ:                    ║\n"
+    text += f"║    Расходы {trend} на {abs(change):.1f}%   ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 📅 ПИК ТРАТ:                  ║\n"
+    text += f"║    Больше всего по {weekdays[max_day]}м       ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    text += f"║ 💎 САМАЯ КРУПНАЯ ТРАТА:       ║\n"
+    text += f"║    {max_emoji} {max_expense['category'][:12]}: {max_expense['amount']:,.0f} ₽ ║\n"
+    
+    # Совет
+    coffee_total = sum(e['amount'] for e in expenses if e['category'] == 'кофе')
+    if coffee_total > 5000:
+        text += f"╠════════════════════════════════╣\n"
+        text += f"║ 💡 СОВЕТ:                     ║\n"
+        text += f"║    На кофе потрачено          ║\n"
+        text += f"║    {coffee_total:,.0f} ₽. Попробуй готовить дома! ║\n"
+    
+    text += f"╚════════════════════════════════╝"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== БЮДЖЕТ ==========
+
+@bot.message_handler(func=lambda message: message.text == '🎯 Бюджет')
+def budget_menu(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("💰 Установить бюджет", callback_data="set_budget"))
+    markup.add(types.InlineKeyboardButton("📊 Проверить бюджет", callback_data="check_budget"))
+    bot.send_message(message.chat.id, "🎯 **Управление бюджетом**\n\nУстанови лимит на месяц, и я буду показывать прогресс!", reply_markup=markup, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data in ['set_budget', 'check_budget'])
+def budget_handler(call):
+    user_id = str(call.message.chat.id)
+    data = load_data()
+    
+    if call.data == 'set_budget':
+        msg = bot.send_message(call.message.chat.id, "💰 Введите сумму бюджета на месяц (например: 50000)")
+        bot.register_next_step_handler(msg, save_budget)
+        bot.answer_callback_query(call.id)
+    else:
+        if user_id in data and 'budget' in data[user_id]:
+            budget = data[user_id]['budget']
+            month_expenses = sum(e['amount'] for e in data[user_id]['expenses'] if e['date'].startswith(datetime.now().strftime('%Y-%m')))
+            percent = (month_expenses / budget) * 100
+            left = budget - month_expenses
+            
+            if percent < 80:
+                status = "✅ ХОРОШО"
+                status_emoji = "🟢"
+            elif percent < 100:
+                status = "⚠️ ВНИМАНИЕ"
+                status_emoji = "🟡"
+            else:
+                status = "🔴 ПРЕВЫШЕН"
+                status_emoji = "🔴"
+            
+            text = f"╔════════════════════════════════╗\n"
+            text += f"║         🎯 БЮДЖЕТ 🎯          ║\n"
+            text += f"╠════════════════════════════════╣\n"
+            text += f"║ 💰 Лимит:    {budget:>12,.0f} ₽ ║\n"
+            text += f"║ 💸 Потрачено: {month_expenses:>12,.0f} ₽ ║\n"
+            text += f"║ 📊 Осталось: {left:>12,.0f} ₽ ║\n"
+            text += f"║ 📈 Выполнено: {percent:>11.1f}% ║\n"
+            text += f"╠════════════════════════════════╣\n"
+            text += f"║ {status_emoji} Статус: {status:<19} ║\n"
+            text += f"╚════════════════════════════════╝"
+            
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+        else:
+            bot.edit_message_text("❌ Бюджет не установлен. Используй '💰 Установить бюджет'", call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id)
+
+def save_budget(message):
+    user_id = str(message.chat.id)
+    try:
+        budget = float(message.text.strip())
+        data = load_data()
+        if user_id not in data:
+            data[user_id] = {'expenses': [], 'incomes': []}
+        data[user_id]['budget'] = budget
+        save_data(data)
+        bot.send_message(message.chat.id, f"✅ Бюджет установлен: {budget:,.0f} ₽ на месяц")
+    except:
+        bot.send_message(message.chat.id, "❌ Ошибка! Введите число, например: 50000")
+
+# ========== ЭКСПОРТ CSV ==========
+
+@bot.message_handler(func=lambda message: message.text == '📎 Экспорт CSV')
+def export_csv(message):
+    user_id = str(message.chat.id)
+    data = load_data()
+    
+    if user_id not in data or (not data[user_id]['expenses'] and not data[user_id]['incomes']):
+        bot.send_message(message.chat.id, "📭 Нет данных для экспорта")
+        return
+    
+    import io
+    import csv
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Дата', 'Время', 'Категория', 'Сумма', 'Тип'])
+    
+    for e in data[user_id]['expenses']:
+        writer.writerow([e['date'], e['time'], e['category'], e['amount'], 'Расход'])
+    for i in data[user_id]['incomes']:
+        writer.writerow([i['date'], i['time'], i['category'], i['amount'], 'Доход'])
+    
+    filename = f'finance_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    bot.send_document(message.chat.id, io.BytesIO(output.getvalue().encode('utf-8-sig')), visible_file_name=filename)
+    bot.send_message(message.chat.id, "📎 Файл с данными отправлен! Можно открыть в Excel или Google Sheets")
+
+# ========== ДОСТИЖЕНИЯ ==========
+
+@bot.message_handler(func=lambda message: message.text == '🏆 Достижения')
+def show_achievements(message):
+    user_id = str(message.chat.id)
+    data = load_data()
+    
+    if user_id not in data:
+        bot.send_message(message.chat.id, "📭 Нет данных")
+        return
+    
+    expenses = data[user_id]['expenses']
+    incomes = data[user_id]['incomes']
+    total_expenses = len(expenses)
+    total_sum = sum(e['amount'] for e in expenses)
+    
+    achievements = []
+    
+    # Достижения по количеству трат
+    if total_expenses >= 100:
+        achievements.append("🏆 100 трат! Ты настоящий финансовый гуру!")
+    elif total_expenses >= 50:
+        achievements.append("🏅 50 трат! Отличный темп!")
+    elif total_expenses >= 10:
+        achievements.append("📊 10 трат! Первые шаги!")
+    
+    # Достижения по сумме
+    if total_sum >= 1000000:
+        achievements.append("💎 МИЛЛИОНЕР! Ты потратил больше миллиона!")
+    elif total_sum >= 500000:
+        achievements.append("💰 500к! Серьёзный уровень!")
+    elif total_sum >= 100000:
+        achievements.append("💵 100к! Клуб ста тысяч!")
+    
+    # Экономия (расходы уменьшились)
+    month_ago = datetime.now() - timedelta(days=30)
+    old_expenses = [e for e in expenses if datetime.fromisoformat(e['timestamp']) < month_ago]
+    new_expenses = [e for e in expenses if datetime.fromisoformat(e['timestamp']) >= month_ago]
+    old_sum = sum(e['amount'] for e in old_expenses)
+    new_sum = sum(e['amount'] for e in new_expenses)
+    if old_sum > 0 and new_sum < old_sum * 0.8:
+        achievements.append("📉 ЭКОНОМИСТ! Ты сократил расходы на 20%!")
+    
+    # Достижение за наличие дохода
+    if incomes:
+        achievements.append("💼 Есть доход! Хороший знак!")
+    
+    if not achievements:
+        achievements.append("🔰 Начинающий трекер. Добавляй больше трат и открывай достижения!")
+    
+    text = f"╔════════════════════════════════╗\n"
+    text += f"║       🏆 ДОСТИЖЕНИЯ 🏆        ║\n"
+    text += f"╠════════════════════════════════╣\n"
+    
+    for ach in achievements:
+        text += f"║ {ach[:26]:<26} ║\n"
+    
+    text += f"╚════════════════════════════════╝\n\n"
+    text += f"📊 Статистика:\n"
+    text += f"💰 Всего трат: {total_expenses}\n"
+    text += f"💸 На сумму: {total_sum:,.0f} ₽"
+    
+    bot.send_message(message.chat.id, text, parse_mode='Markdown')
+
+# ========== СБРОС ==========
 
 @bot.message_handler(func=lambda message: message.text == '🗑 Сбросить всё')
 def reset_confirm(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Да", callback_data="reset_yes"))
-    markup.add(types.InlineKeyboardButton("❌ Нет", callback_data="reset_no"))
-    bot.send_message(message.chat.id, "⚠️ Удалить все данные?", reply_markup=markup)
+    markup.add(types.InlineKeyboardButton("✅ Да, удалить всё", callback_data="reset_yes"))
+    markup.add(types.InlineKeyboardButton("❌ Нет, отмена", callback_data="reset_no"))
+    bot.send_message(message.chat.id, "⚠️ **ВНИМАНИЕ!** ⚠️\n\nВы уверены, что хотите удалить ВСЕ данные?\n\nЭто действие нельзя отменить!", reply_markup=markup, parse_mode='Markdown')
 
 @bot.callback_query_handler(func=lambda call: call.data in ['reset_yes', 'reset_no'])
 def handle_reset(call):
@@ -344,12 +553,15 @@ def handle_reset(call):
         if user_id in data:
             data[user_id] = {'expenses': [], 'incomes': []}
             save_data(data)
-        bot.edit_message_text("✅ Данные удалены", call.message.chat.id, call.message.message_id)
+        bot.edit_message_text("✅ Все данные удалены!", call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "Начните с чистого листа! /start")
     else:
-        bot.edit_message_text("❌ Отменено", call.message.chat.id, call.message.message_id)
+        bot.edit_message_text("❌ Удаление отменено.", call.message.chat.id, call.message.message_id)
     bot.answer_callback_query(call.id)
 
-@bot.message_handler(func=lambda message: message.text and not message.text.startswith('/') and not any(message.text.startswith(x) for x in ['💰', '💵', '📊', '📅', '📈', '⭐', '🗑']))
+# ========== БЫСТРЫЙ ВВОД ==========
+
+@bot.message_handler(func=lambda message: message.text and not message.text.startswith('/') and not any(message.text.startswith(x) for x in ['💰', '💵', '📊', '📅', '📈', '📆', '🔥', '🎯', '📎', '🏆', '🗑']))
 def quick_add(message):
     text = message.text.strip()
     parts = text.split()
@@ -364,35 +576,45 @@ def quick_add(message):
             data[user_id] = {'expenses': [], 'incomes': []}
         
         if category in CATEGORIES_INCOME:
-            data[user_id]['incomes'].append({
-                'amount': amount, 'category': category,
+            transaction = {
+                'amount': amount,
+                'category': category,
                 'date': datetime.now().strftime('%Y-%m-%d'),
                 'time': datetime.now().strftime('%H:%M:%S'),
                 'timestamp': datetime.now().isoformat()
-            })
-            bot.reply_to(message, f"✅ Доход: {CATEGORIES_INCOME.get(category, '📦')} {category} - {amount} ₽")
+            }
+            data[user_id]['incomes'].append(transaction)
+            save_data(data)
+            emoji = CATEGORIES_INCOME.get(category, '📦')
+            bot.reply_to(message, f"✅ Доход добавлен: {emoji} {category} - {amount:,.0f} ₽")
         else:
             if category not in CATEGORIES:
                 category = 'прочее'
-            data[user_id]['expenses'].append({
-                'amount': amount, 'category': category,
+            transaction = {
+                'amount': amount,
+                'category': category,
                 'date': datetime.now().strftime('%Y-%m-%d'),
                 'time': datetime.now().strftime('%H:%M:%S'),
                 'timestamp': datetime.now().isoformat()
-            })
-            bot.reply_to(message, f"✅ Расход: {CATEGORIES.get(category, '📦')} {category} - {amount} ₽")
-        save_data(data)
+            }
+            data[user_id]['expenses'].append(transaction)
+            save_data(data)
+            emoji = CATEGORIES.get(category, '📦')
+            bot.reply_to(message, f"✅ Расход добавлен: {emoji} {category} - {amount:,.0f} ₽")
     else:
-        bot.reply_to(message, "❓ Не понял. Напиши /start")
+        bot.reply_to(message, "❓ Не понял. Напиши /start для меню\nИли добавь: категория сумма\nПример: еда 500 или зарплата 50000")
 
 # ========== ЗАПУСК ==========
+
 def run_bot():
-    print("✅ Бот с Premium подпиской работает!")
+    print("✅ БОТ ЗАПУЩЕН!")
+    print("📊 Все функции бесплатны!")
+    print("💰 Трекер расходов и доходов работает!")
     bot.infinity_polling()
 
 @server.route('/')
 def hello():
-    return "OK"
+    return "Бот работает!"
 
 if __name__ == "__main__":
     bot_thread = threading.Thread(target=run_bot)
